@@ -9,18 +9,33 @@
             const currentUrl = window.location.href;
             console.log('Redirect page loaded with URL:', currentUrl);
             
-            // Extract the query string
-            const queryString = window.location.search;
-            console.log('Query string:', queryString);
+            // Extract the query parameters
+            const url = new URL(currentUrl);
+            const code = url.searchParams.get('code');
+            const state = url.searchParams.get('state');
             
-            // Attempt to redirect back to the extension
-            const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + queryString;
-            console.log('Redirecting to extension URL:', extensionUrl);
-            
-            // Redirect with a slight delay to allow logging
-            setTimeout(function() {
+            // First try to send a message back to the opener window
+            if (window.opener && code && state) {
+                console.log('Attempting to post message to opener');
+                window.opener.postMessage({
+                    type: 'apollo_redirect',
+                    code: code,
+                    state: state
+                }, '*');
+                
+                // Wait a moment to ensure the message was sent
+                setTimeout(function() {
+                    // Then attempt the regular redirect
+                    const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
+                    console.log('Redirecting to extension URL:', extensionUrl);
+                    window.location.href = extensionUrl;
+                }, 1000);
+            } else {
+                // Just do the regular redirect
+                const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
+                console.log('Redirecting to extension URL:', extensionUrl);
                 window.location.href = extensionUrl;
-            }, 500);
+            }
         } catch (error) {
             console.error('Error in redirect page:', error);
             document.getElementById('error').textContent = 'Error: ' + error.message;
