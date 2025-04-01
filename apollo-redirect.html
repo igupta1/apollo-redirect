@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Apollo OAuth Redirect</title>
+    <script>
+        // Get the full URL including query string
+        const currentUrl = window.location.href;
+        
+        // Extract the query parameters (code and state)
+        const queryParams = window.location.search;
+        
+        // Build the extension redirect URL
+        const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + queryParams;
+        
+        // Redirect to the Chrome extension
+        window.location.replace(extensionUrl);
+    </script>
+</head>
+<body>
+    <p>Redirecting to LinkMail extension...</p>
+    <p>If you are not automatically redirected, please close this window and try again.</p>
+</body>
+</html>
