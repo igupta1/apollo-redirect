@@ -3,21 +3,35 @@
 <head>
     <title>Apollo OAuth Redirect</title>
     <script>
-        // Get the full URL including query string
-        const currentUrl = window.location.href;
-        
-        // Extract the query parameters (code and state)
-        const queryParams = window.location.search;
-        
-        // Build the extension redirect URL
-        const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + queryParams;
-        
-        // Redirect to the Chrome extension
-        window.location.replace(extensionUrl);
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            // Get the current URL with query parameters
+            const currentUrl = window.location.href;
+            console.log('Redirect page loaded with URL:', currentUrl);
+            
+            // Extract the query string
+            const queryString = window.location.search;
+            console.log('Query string:', queryString);
+            
+            // Attempt to redirect back to the extension
+            const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + queryString;
+            console.log('Redirecting to extension URL:', extensionUrl);
+            
+            // Redirect with a slight delay to allow logging
+            setTimeout(function() {
+                window.location.href = extensionUrl;
+            }, 500);
+        } catch (error) {
+            console.error('Error in redirect page:', error);
+            document.getElementById('error').textContent = 'Error: ' + error.message;
+        }
+    });
     </script>
 </head>
 <body>
+    <h1>Apollo OAuth Redirect</h1>
     <p>Redirecting to LinkMail extension...</p>
     <p>If you are not automatically redirected, please close this window and try again.</p>
+    <p id="error" style="color: red;"></p>
 </body>
 </html>
