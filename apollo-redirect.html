@@ -154,20 +154,41 @@
                 const error = urlParams.get('error');
                 const errorDescription = urlParams.get('error_description');
                 
-                if (error) {
-                    updateStatus('error', 'Authorization failed!', 
-                        errorDescription || error);
+                // Handle Apollo-specific error format
+                const statusCode = urlParams.get('status_code');
+                const errorMessage = urlParams.get('error_message');
+                
+                if (error || statusCode) {
+                    let errorTitle = 'Authorization failed!';
+                    let errorDetails = errorDescription || error || errorMessage;
+                    
+                    // Handle specific Apollo errors
+                    if (statusCode === '401' && errorMessage === 'invalid_client') {
+                        errorTitle = 'Invalid Apollo Client Configuration!';
+                        errorDetails = 'Your Apollo OAuth app may not be properly configured. Please check:\n' +
+                                     '1. Client ID is correct\n' +
+                                     '2. Redirect URL matches exactly\n' +
+                                     '3. App is approved in Apollo developer portal\n' +
+                                     '4. You have OAuth permissions in your Apollo account';
+                    } else if (statusCode === '403') {
+                        errorTitle = 'Permission Denied!';
+                        errorDetails = 'You do not have permission to connect integrations. Please contact your Apollo admin.';
+                    }
+                    
+                    updateStatus('error', errorTitle, errorDetails);
                     
                     // Send error message to extension if possible
                     if (window.opener && window.opener.postMessage) {
                         window.opener.postMessage({
                             type: 'apollo_oauth_error',
-                            error: error,
-                            error_description: errorDescription
+                            error: error || 'apollo_error',
+                            error_description: errorDetails,
+                            status_code: statusCode,
+                            error_message: errorMessage
                         }, '*');
                     }
                     
-                    setTimeout(closeWindow, 3000);
+                    setTimeout(closeWindow, 5000); // Give more time to read the detailed error
                     return;
                 }
                 
@@ -181,6 +202,17 @@
                             type: 'apollo_oauth_success',
                             code: code
                         }, '*');
+                    }
+                    
+                    // Also try to communicate with the Chrome extension directly
+                    try {
+                        chrome.runtime.sendMessage({
+                            action: 'apolloAuthComplete',
+                            success: true,
+                            code: code
+                        });
+                    } catch (e) {
+                        console.log('Could not send message to extension:', e);
                     }
                     
                     // For Chrome extension identity flow, we let the extension handle the URL
