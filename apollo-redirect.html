@@ -1,52 +1,214 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Apollo OAuth Redirect</title>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        try {
-            // Get the current URL with query parameters
-            const currentUrl = window.location.href;
-            console.log('Redirect page loaded with URL:', currentUrl);
-            
-            // Extract the query parameters
-            const url = new URL(currentUrl);
-            const code = url.searchParams.get('code');
-            const state = url.searchParams.get('state');
-            
-            // First try to send a message back to the opener window
-            if (window.opener && code && state) {
-                console.log('Attempting to post message to opener');
-                window.opener.postMessage({
-                    type: 'apollo_redirect',
-                    code: code,
-                    state: state
-                }, '*');
-                
-                // Wait a moment to ensure the message was sent
-                setTimeout(function() {
-                    // Then attempt the regular redirect
-                    const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
-                    console.log('Redirecting to extension URL:', extensionUrl);
-                    window.location.href = extensionUrl;
-                }, 1000);
-            } else {
-                // Just do the regular redirect
-                const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
-                console.log('Redirecting to extension URL:', extensionUrl);
-                window.location.href = extensionUrl;
-            }
-        } catch (error) {
-            console.error('Error in redirect page:', error);
-            document.getElementById('error').textContent = 'Error: ' + error.message;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apollo OAuth Redirect - LinkMail</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-    });
-    </script>
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            background: #0077b5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0077b5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 15px;
+        }
+        
+        .close-note {
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
 </head>
 <body>
-    <h1>Apollo OAuth Redirect</h1>
-    <p>Redirecting to LinkMail extension...</p>
-    <p>If you are not automatically redirected, please close this window and try again.</p>
-    <p id="error" style="color: red;"></p>
+    <div class="container">
+        <div class="logo">LM</div>
+        <h1>Apollo OAuth</h1>
+        
+        <div id="status" class="status loading">
+            <div class="spinner"></div>
+            Processing authorization...
+        </div>
+        
+        <div id="details" class="details"></div>
+        
+        <div class="close-note">
+            This window will close automatically once processing is complete.
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(type, message, details = '') {
+            const statusDiv = document.getElementById('status');
+            const detailsDiv = document.getElementById('details');
+            
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = type === 'loading' 
+                ? '<div class="spinner"></div>' + message 
+                : message;
+            
+            detailsDiv.textContent = details;
+        }
+        
+        function closeWindow() {
+            // Try different methods to close the window
+            try {
+                window.close();
+            } catch (e) {
+                console.log('Could not close window automatically');
+            }
+            
+            // Fallback: redirect to close page or show close message
+            setTimeout(() => {
+                if (!window.closed) {
+                    updateStatus('success', 'Authorization complete!', 'You can now close this window and return to LinkedIn.');
+                }
+            }, 1000);
+        }
+        
+        function handleOAuthCallback() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const error = urlParams.get('error');
+                const errorDescription = urlParams.get('error_description');
+                
+                if (error) {
+                    updateStatus('error', 'Authorization failed!', 
+                        errorDescription || error);
+                    
+                    // Send error message to extension if possible
+                    if (window.opener && window.opener.postMessage) {
+                        window.opener.postMessage({
+                            type: 'apollo_oauth_error',
+                            error: error,
+                            error_description: errorDescription
+                        }, '*');
+                    }
+                    
+                    setTimeout(closeWindow, 3000);
+                    return;
+                }
+                
+                if (code) {
+                    updateStatus('success', 'Authorization successful!', 
+                        'Redirecting back to the extension...');
+                    
+                    // Send success message to extension if possible
+                    if (window.opener && window.opener.postMessage) {
+                        window.opener.postMessage({
+                            type: 'apollo_oauth_success',
+                            code: code
+                        }, '*');
+                    }
+                    
+                    // For Chrome extension identity flow, we let the extension handle the URL
+                    // The window will be closed by the extension
+                    setTimeout(closeWindow, 2000);
+                } else {
+                    updateStatus('error', 'No authorization code received!', 
+                        'Please try connecting your Apollo account again.');
+                    setTimeout(closeWindow, 3000);
+                }
+                
+            } catch (err) {
+                console.error('Error processing OAuth callback:', err);
+                updateStatus('error', 'Processing error!', 
+                    'An unexpected error occurred while processing the authorization.');
+                setTimeout(closeWindow, 3000);
+            }
+        }
+        
+        // Handle the OAuth callback when page loads
+        document.addEventListener('DOMContentLoaded', handleOAuthCallback);
+        
+        // Also handle if called directly
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', handleOAuthCallback);
+        } else {
+            handleOAuthCallback();
+        }
+    </script>
 </body>
-</html>
+</html> 
