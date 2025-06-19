@@ -13,28 +13,34 @@
             const url = new URL(currentUrl);
             const code = url.searchParams.get('code');
             const state = url.searchParams.get('state');
+            const error = url.searchParams.get('error');
             
-            // First try to send a message back to the opener window
+            if (error) {
+                console.error('OAuth error:', error);
+                document.getElementById('status').textContent = 'Authentication failed: ' + error;
+                document.getElementById('status').style.color = 'red';
+                return;
+            }
+            
+            // Send message back to the opener window
             if (window.opener && code && state) {
-                console.log('Attempting to post message to opener');
+                console.log('Sending OAuth result to opener window');
                 window.opener.postMessage({
                     type: 'apollo_redirect',
                     code: code,
                     state: state
                 }, '*');
                 
-                // Wait a moment to ensure the message was sent
+                document.getElementById('status').textContent = 'Authentication successful! You can close this window.';
+                document.getElementById('status').style.color = 'green';
+                
+                // Auto-close after a short delay
                 setTimeout(function() {
-                    // Then attempt the regular redirect
-                    const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
-                    console.log('Redirecting to extension URL:', extensionUrl);
-                    window.location.href = extensionUrl;
-                }, 1000);
+                    window.close();
+                }, 2000);
             } else {
-                // Just do the regular redirect
-                const extensionUrl = "https://mdfjegkgakdcffblbehhmoebkkghagbe.chromiumapp.org/apollo" + window.location.search;
-                console.log('Redirecting to extension URL:', extensionUrl);
-                window.location.href = extensionUrl;
+                document.getElementById('status').textContent = 'Error: Missing authorization code or invalid opener window.';
+                document.getElementById('status').style.color = 'red';
             }
         } catch (error) {
             console.error('Error in redirect page:', error);
@@ -45,8 +51,8 @@
 </head>
 <body>
     <h1>Apollo OAuth Redirect</h1>
-    <p>Redirecting to LinkMail extension...</p>
-    <p>If you are not automatically redirected, please close this window and try again.</p>
+    <p id="status">Processing authentication...</p>
+    <p>If this window doesn't close automatically, you can close it manually.</p>
     <p id="error" style="color: red;"></p>
 </body>
 </html>
