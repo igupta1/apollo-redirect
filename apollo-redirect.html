@@ -150,13 +150,141 @@
         function handleOAuthCallback() {
             try {
                 const urlParams = new URLSearchParams(window.location.search);
-                const code = urlParams.get('code');
+                let code = urlParams.get('code');
                 const error = urlParams.get('error');
                 const errorDescription = urlParams.get('error_description');
                 
                 // Handle Apollo-specific error format
                 const statusCode = urlParams.get('status_code');
                 const errorMessage = urlParams.get('error_message');
+                
+                console.log('Processing OAuth callback with URL:', window.location.href);
+                console.log('Extracted parameters:', { code, error, statusCode, errorMessage });
+                
+                // Add visual debugging info to the page
+                const debugInfo = document.createElement('div');
+                debugInfo.style.cssText = 'position: fixed; top: 10px; left: 10px; background: #f0f0f0; padding: 10px; font-size: 12px; max-width: 300px; z-index: 9999; border: 1px solid #ccc;';
+                debugInfo.innerHTML = `
+                    <strong>Debug Info:</strong><br>
+                    URL: ${window.location.href}<br>
+                    Code: ${code || 'not found'}<br>
+                    Error: ${error || 'none'}<br>
+                    Status: ${statusCode || 'none'}<br>
+                    Message: ${errorMessage || 'none'}
+                `;
+                document.body.appendChild(debugInfo);
+                
+                // Sometimes Apollo redirects multiple times, try to get code from hash or different sources
+                if (!code && window.location.hash) {
+                    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                    code = hashParams.get('code');
+                    console.log('Found code in hash:', code);
+                }
+                
+                // Special handling for Apollo's complex redirect flow
+                if (!code && statusCode === '401' && errorMessage === 'invalid_client') {
+                    console.log('Initial invalid_client error - this may resolve to success shortly...');
+                    
+                    // Set up a listener for URL changes or wait for a redirect
+                    let checkCount = 0;
+                    const checkForSuccess = () => {
+                        checkCount++;
+                        console.log(`Checking for successful redirect (attempt ${checkCount})...`);
+                        
+                        const currentUrl = new URL(window.location.href);
+                        const currentParams = new URLSearchParams(currentUrl.search);
+                        const newCode = currentParams.get('code');
+                        
+                        if (newCode) {
+                            console.log('Found authorization code:', newCode);
+                            proceedWithCode(newCode);
+                            return;
+                        }
+                        
+                        if (checkCount < 10) { // Check for up to 5 seconds
+                            setTimeout(checkForSuccess, 500);
+                        } else {
+                            console.log('No code found after multiple checks');
+                            
+                            // Try one more method - check if we can find the code in the current page
+                            let foundCode = null;
+                            
+                            // Check if there's a code in the current URL (sometimes it appears later)
+                            const finalCheck = new URLSearchParams(window.location.search);
+                            foundCode = finalCheck.get('code');
+                            
+                            if (!foundCode) {
+                                // Try to extract from the page content or other sources
+                                const pageContent = document.body.textContent || '';
+                                const codeMatch = pageContent.match(/code[=:]([a-zA-Z0-9_-]+)/i);
+                                if (codeMatch) {
+                                    foundCode = codeMatch[1];
+                                    console.log('Found code in page content:', foundCode);
+                                }
+                            }
+                            
+                            if (foundCode) {
+                                console.log('Found authorization code on final check:', foundCode);
+                                proceedWithCode(foundCode);
+                            } else {
+                                console.log('Still no code found, but Apollo shows success');
+                                updateStatus('error', 'Authorization Issue', 
+                                    'Apollo authorized successfully but no authorization code was provided. Please check your Apollo app configuration.');
+                                
+                                // Ask user to manually extract the code
+                                setTimeout(() => {
+                                    const manualCode = prompt(
+                                        'Apollo authorization was successful, but we could not automatically extract the authorization code.\n\n' +
+                                        'Please look at this page\'s URL in the address bar and find a parameter that looks like "code=ABC123..." \n\n' +
+                                        'If you see such a code, please paste it here (just the code part, not "code="):'
+                                    );
+                                    
+                                    if (manualCode && manualCode.trim()) {
+                                        proceedWithCode(manualCode.trim());
+                                    } else {
+                                        if (window.opener && window.opener.postMessage) {
+                                            window.opener.postMessage({
+                                                type: 'apollo_oauth_success',
+                                                code: 'success_without_code'
+                                            }, '*');
+                                        }
+                                    }
+                                }, 2000);
+                            }
+                        }
+                    };
+                    
+                    setTimeout(checkForSuccess, 1000);
+                    return; // Exit early, let the polling handle it
+                }
+                
+                function proceedWithCode(authCode) {
+                    updateStatus('success', 'Authorization successful!', 
+                        'Redirecting back to the extension...');
+                    
+                    // Send success message to extension if possible
+                    if (window.opener && window.opener.postMessage) {
+                        window.opener.postMessage({
+                            type: 'apollo_oauth_success',
+                            code: authCode
+                        }, '*');
+                    }
+                    
+                    // Also try to communicate with the Chrome extension directly
+                    try {
+                        chrome.runtime.sendMessage({
+                            action: 'apolloAuthComplete',
+                            success: true,
+                            code: authCode
+                        });
+                    } catch (e) {
+                        console.log('Could not send message to extension:', e);
+                    }
+                    
+                    // For Chrome extension identity flow, we let the extension handle the URL
+                    // The window will be closed by the extension
+                    setTimeout(closeWindow, 2000);
+                }
                 
                 if (error || statusCode) {
                     let errorTitle = 'Authorization failed!';
@@ -193,31 +321,7 @@
                 }
                 
                 if (code) {
-                    updateStatus('success', 'Authorization successful!', 
-                        'Redirecting back to the extension...');
-                    
-                    // Send success message to extension if possible
-                    if (window.opener && window.opener.postMessage) {
-                        window.opener.postMessage({
-                            type: 'apollo_oauth_success',
-                            code: code
-                        }, '*');
-                    }
-                    
-                    // Also try to communicate with the Chrome extension directly
-                    try {
-                        chrome.runtime.sendMessage({
-                            action: 'apolloAuthComplete',
-                            success: true,
-                            code: code
-                        });
-                    } catch (e) {
-                        console.log('Could not send message to extension:', e);
-                    }
-                    
-                    // For Chrome extension identity flow, we let the extension handle the URL
-                    // The window will be closed by the extension
-                    setTimeout(closeWindow, 2000);
+                    proceedWithCode(code);
                 } else {
                     updateStatus('error', 'No authorization code received!', 
                         'Please try connecting your Apollo account again.');
